@@ -17,6 +17,12 @@
     <div industry_name></div>
 </div>
 <div class="gupiao_areas">股票区域</div>
+<div class="tools-container">
+    <div class="clipboard-tool">
+        <button id="clipboard-btn">读取剪贴板匹配股票代码</button>
+        <div id="clipboard-result">匹配结果: <span id="match-count">0</span> 只股票</div>
+    </div>
+</div>
 <div class="title">
     <div>代码</div>
     <div>名称</div>
@@ -32,6 +38,7 @@
     <div>5日低</div>
     <div>30日高</div>
     <div>30日低</div>
+    <div>7个点次数</div> <!-- 新增列 -->
     <div>今高%</div>
     <div>今高次</div>
     <div>5日高%</div>
@@ -98,6 +105,17 @@
             window.pywebview.api.get_stock_information(industryName)
                 .then(function(stocks) {
                     console.log('获取到股票数据:', stocks);
+                    // 计算7%涨幅次数
+                    stocks.forEach(function(stock) {
+                        // 添加7个点次数字段（默认为0）
+                        stock['seven_percent_count'] = stock['seven_percent_count'] || 0;
+
+                        // 判断当日涨幅是否达到7%
+                        if (parseFloat(stock['今日涨幅%']) >= 7.0) {
+                            stock['seven_percent_count'] = (stock['seven_percent_count'] || 0) + 1;
+                        }
+                    });
+
                     displayStockData(stocks, industryName, timeString);
                 })
                 .catch(function(err) {
@@ -148,6 +166,7 @@
             { key: '5日最低收盘价', label: '5日低' },
             { key: '30日最高收盘价', label: '30日高' },
             { key: '30日最低收盘价', label: '30日低' },
+            { key: 'seven_percent_count', label: '7个点次数' }, // 新增列
             { key: '距今日最高%', label: '今高%' },
             { key: 'count_today_high', label: '今高次' },
             { key: '距5日最高%', label: '5日高%' },
@@ -173,7 +192,7 @@
 
             // 添加排序点击事件
             th.addEventListener('click', function() {
-                sortTable(table, header.key);
+                sortTableInGroups(table, header.key);
             });
 
             headerRow.appendChild(th);
@@ -192,17 +211,16 @@
             return valueB - valueA; // 降序排列
         });
 
-        sortedStocks.forEach(function(stock, index) {
-            var row = document.createElement('tr');
+        // 创建各分组
+        var top10Stocks = sortedStocks.slice(0, 10);
+        var top20Stocks = sortedStocks.slice(10, 20);
+        var otherStocks = sortedStocks.slice(20);
 
-            // 根据排名添加背景色类
-            if (index < 10) {
-                row.classList.add('top10');
-            } else if (index < 20) {
-                row.classList.add('top20');
-            } else {
-                row.classList.add('others');
-            }
+        // 函数：渲染单个股票行
+        function renderStockRow(stock, groupClass) {
+            var row = document.createElement('tr');
+            row.classList.add(groupClass);
+            row.setAttribute('data-stock-code', stock['股票代码']); // 用于剪贴板匹配
 
             // 为缺少的字段添加默认值
             if (!stock.hasOwnProperty('count_today_high')) stock.count_today_high = 0;
@@ -211,6 +229,7 @@
             if (!stock.hasOwnProperty('count_today_low')) stock.count_today_low = 0;
             if (!stock.hasOwnProperty('count_5day_low')) stock.count_5day_low = 0;
             if (!stock.hasOwnProperty('count_30day_low')) stock.count_30day_low = 0;
+            if (!stock.hasOwnProperty('seven_percent_count')) stock.seven_percent_count = 0;
 
             headers.forEach(function(header) {
                 var td = document.createElement('td');
@@ -242,7 +261,7 @@
                         value = value !== null && value !== undefined ? parseFloat(value).toFixed(2) + '%' : '-';
                     }
                     // 次数字段采用整数显示
-                    else if (header.key.includes('count_')) {
+                    else if (header.key.includes('count_') || header.key === 'seven_percent_count') {
                         value = value !== null && value !== undefined ? parseInt(value) : '0';
                     }
                 }
@@ -251,7 +270,36 @@
                 row.appendChild(td);
             });
 
-            tbody.appendChild(row);
+            return row;
+        }
+
+        // 添加分组标题行
+        function addGroupHeader(text) {
+            var groupHeader = document.createElement('tr');
+            groupHeader.className = 'group-header';
+            var headerCell = document.createElement('td');
+            headerCell.colSpan = headers.length;
+            headerCell.textContent = text;
+            groupHeader.appendChild(headerCell);
+            return groupHeader;
+        }
+
+        // 添加前10名
+        tbody.appendChild(addGroupHeader('流通市值前10名'));
+        top10Stocks.forEach(function(stock) {
+            tbody.appendChild(renderStockRow(stock, 'top10'));
+        });
+
+        // 添加11-20名
+        tbody.appendChild(addGroupHeader('流通市值11-20名'));
+        top20Stocks.forEach(function(stock) {
+            tbody.appendChild(renderStockRow(stock, 'top20'));
+        });
+
+        // 添加其他
+        tbody.appendChild(addGroupHeader('其他股票'));
+        otherStocks.forEach(function(stock) {
+            tbody.appendChild(renderStockRow(stock, 'others'));
         });
 
         table.appendChild(tbody);
@@ -260,14 +308,13 @@
         stockContainer.innerHTML = '';
         stockContainer.appendChild(headerInfo);
         stockContainer.appendChild(table);
+
+        // 存储当前股票数据用于剪贴板匹配
+        window.currentStocks = stocks;
     }
 
-    // 表格排序功能
-    function sortTable(table, key) {
-        var tbody = table.querySelector('tbody');
-        var rows = Array.from(tbody.querySelectorAll('tr'));
-
-        // 获取当前排序方向
+    // 分组内排序函数
+    function sortTableInGroups(table, key) {
         var currentDir = table.getAttribute('data-sort-dir') || 'asc';
         var currentKey = table.getAttribute('data-sort-key');
 
@@ -290,30 +337,154 @@
 
         if (index === -1) return;
 
-        // 排序行
-        rows.sort(function(a, b) {
-            var cellA = a.cells[index].textContent;
-            var cellB = b.cells[index].textContent;
+        var tbody = table.querySelector('tbody');
 
-            // 尝试解析数字
-            var valueA = parseFloat(cellA.replace('%', '').replace('亿', ''));
-            var valueB = parseFloat(cellB.replace('%', '').replace('亿', ''));
+        // 获取所有分组
+        var groups = [];
+        var currentGroup = null;
+        var currentRows = [];
 
-            if (!isNaN(valueA) && !isNaN(valueB)) {
-                // 数字比较
-                return newDir === 'asc' ? valueA - valueB : valueB - valueA;
+        // 遍历所有行，按分组收集
+        Array.from(tbody.querySelectorAll('tr')).forEach(function(row) {
+            if (row.classList.contains('group-header')) {
+                // 如果有已收集的组，保存它
+                if (currentGroup !== null && currentRows.length > 0) {
+                    groups.push({ header: currentGroup, rows: currentRows });
+                }
+                // 开始新的组
+                currentGroup = row;
+                currentRows = [];
             } else {
-                // 字符串比较
-                return newDir === 'asc'
-                    ? cellA.localeCompare(cellB, 'zh')
-                    : cellB.localeCompare(cellA, 'zh');
+                // 添加到当前组
+                currentRows.push(row);
             }
         });
 
-        // 重建表格
-        rows.forEach(function(row) {
-            tbody.appendChild(row);
+        // 添加最后一组
+        if (currentGroup !== null && currentRows.length > 0) {
+            groups.push({ header: currentGroup, rows: currentRows });
+        }
+
+        // 对每个组内的行进行排序
+        groups.forEach(function(group) {
+            // 排序该组内的行
+            group.rows.sort(function(rowA, rowB) {
+                var cellA = rowA.cells[index].textContent;
+                var cellB = rowB.cells[index].textContent;
+
+                // 尝试解析数字
+                var valueA = parseFloat(cellA.replace('%', '').replace('亿', ''));
+                var valueB = parseFloat(cellB.replace('%', '').replace('亿', ''));
+
+                if (!isNaN(valueA) && !isNaN(valueB)) {
+                    // 数字比较
+                    return newDir === 'asc' ? valueA - valueB : valueB - valueA;
+                } else {
+                    // 字符串比较
+                    return newDir === 'asc'
+                        ? cellA.localeCompare(cellB, 'zh')
+                        : cellB.localeCompare(cellA, 'zh');
+                }
+            });
         });
+
+        // 清空表格
+        while (tbody.firstChild) {
+            tbody.removeChild(tbody.firstChild);
+        }
+
+        // 重建表格，保持分组顺序
+        groups.forEach(function(group) {
+            tbody.appendChild(group.header);
+            group.rows.forEach(function(row) {
+                tbody.appendChild(row);
+            });
+        });
+    }
+
+    // 剪贴板功能
+    document.addEventListener('DOMContentLoaded', function() {
+        var clipboardBtn = document.getElementById('clipboard-btn');
+        if (clipboardBtn) {
+            clipboardBtn.addEventListener('click', handleClipboardRead);
+        }
+    });
+
+    // 读取剪贴板并匹配股票代码
+    function handleClipboardRead() {
+        // 检查clipboard API是否可用
+        if (!navigator.clipboard) {
+            alert('您的浏览器不支持剪贴板功能，请使用更现代的浏览器。');
+            return;
+        }
+
+        navigator.clipboard.readText()
+            .then(function(clipText) {
+                // 处理剪贴板文本
+                if (!clipText) {
+                    alert('剪贴板为空！');
+                    return;
+                }
+
+                // 分割文本为行，然后清理每行
+                var codeLines = clipText.split(/\r?\n/)
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0);
+
+                // 如果没有当前股票数据，提示用户
+                if (!window.currentStocks || window.currentStocks.length === 0) {
+                    alert('请先加载股票数据！');
+                    return;
+                }
+
+                // 匹配代码
+                var matchedCodes = [];
+                var stockCodeMap = {};
+
+                // 创建股票代码映射
+                window.currentStocks.forEach(function(stock) {
+                    var code = stock['股票代码'];
+                    var numericCode = code.replace(/^[a-z]+/, ''); // 提取数字部分
+                    stockCodeMap[numericCode] = code;
+                    stockCodeMap[code] = code;
+                });
+
+                // 查找匹配
+                codeLines.forEach(function(clipCode) {
+                    // 尝试匹配完整代码或数字部分
+                    if (stockCodeMap[clipCode]) {
+                        matchedCodes.push(stockCodeMap[clipCode]);
+                    }
+                });
+
+                // 显示匹配结果
+                var matchCount = document.getElementById('match-count');
+                if (matchCount) {
+                    matchCount.textContent = matchedCodes.length;
+                }
+
+                // 高亮匹配的行
+                var allRows = document.querySelectorAll('.stock-table tr:not(.group-header)');
+                allRows.forEach(function(row) {
+                    // 移除之前的高亮
+                    row.classList.remove('clipboard-match');
+
+                    // 检查是否匹配
+                    var stockCode = row.getAttribute('data-stock-code');
+                    if (matchedCodes.includes(stockCode)) {
+                        row.classList.add('clipboard-match');
+                    }
+                });
+
+                // 如果没有匹配项
+                if (matchedCodes.length === 0) {
+                    alert('没有找到匹配的股票代码！');
+                }
+            })
+            .catch(function(err) {
+                console.error('读取剪贴板失败:', err);
+                alert('读取剪贴板失败: ' + err);
+            });
     }
 
     // 页面加载完成后开始检查
