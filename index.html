@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>股票爬取工具</title>
+    <link rel="stylesheet" href="css/index.css">
+    <link rel="icon" href="data:,">
+</head>
+<body>
+<div class="industry_areas">行业区域</div>
+<div class="industry_title">
+    <div>行业代码</div>
+    <div>行业名称</div>
+</div>
+<div class="industry_data">
+    <div industry_code></div>
+    <div industry_name></div>
+</div>
+<div class="gupiao_areas">股票区域</div>
+<div class="title">
+    <div>代码</div>
+    <div>名称</div>
+    <div>行业</div>
+    <div>流通市值</div>
+    <div>涨幅</div>
+    <div>成交额</div>
+    <div>换手</div>
+    <div>现价</div>
+    <div>今最高</div>
+    <div>今最低</div>
+    <div>5日高</div>
+    <div>5日低</div>
+    <div>30日高</div>
+    <div>30日低</div>
+    <div>今高%</div>
+    <div>今高次</div>
+    <div>5日高%</div>
+    <div>5日高次</div>
+    <div>30日高%</div>
+    <div>30日高次</div>
+    <div>今低%</div>
+    <div>今低次</div>
+    <div>5日低%</div>
+    <div>5日低次</div>
+    <div>30日低%</div>
+    <div>30日低次</div>
+</div>
+<div id="stock-container">
+    <!-- 股票数据将在这里显示 -->
+    <div class="loading">请点击行业名称加载股票数据</div>
+</div>
+
+<script>
+    // 检查pywebview是否可用，并获取行业名称
+    function checkPywebview() {
+        if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.get_industry_names()
+                .then(function(names) {
+                    console.log('获取到行业名称:', names);
+                    // 将获取到的行业名称显示在行业代码这一行
+                    var industryCodeDiv = document.querySelector('[industry_code]');
+                    if (industryCodeDiv) {
+                        industryCodeDiv.innerHTML = '';  // 清空现有内容
+                        names.forEach(function(name) {
+                            var div = document.createElement('div');
+                            div.textContent = name;
+                            div.className = 'industry-item'; // 添加样式类
+
+                            // 添加点击事件
+                            div.addEventListener('click', function() {
+                                loadStockData(name);
+                            });
+
+                            industryCodeDiv.appendChild(div);
+                        });
+                    }
+                })
+                .catch(function(err) {
+                    console.error('API调用失败:', err);
+                });
+        } else {
+            // 如果pywebview不存在，1秒后再检查
+            setTimeout(checkPywebview, 1000);
+        }
+    }
+
+    // 加载股票数据
+    function loadStockData(industryName) {
+        // 显示加载提示
+        var stockContainer = document.getElementById('stock-container');
+        stockContainer.innerHTML = '<div class="loading">正在加载 ' + industryName + ' 行业的股票数据，请稍候...</div>';
+
+        // 记录当前时间
+        var currentTime = new Date();
+        var timeString = currentTime.toLocaleString();
+
+        if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.get_stock_information(industryName)
+                .then(function(stocks) {
+                    console.log('获取到股票数据:', stocks);
+                    displayStockData(stocks, industryName, timeString);
+                })
+                .catch(function(err) {
+                    console.error('获取股票数据失败:', err);
+                    stockContainer.innerHTML = '<div class="loading">获取股票数据失败: ' + err + '</div>';
+                });
+        }
+    }
+
+    // 显示股票数据
+    function displayStockData(stocks, industryName, timeString) {
+        var stockContainer = document.getElementById('stock-container');
+
+        if (!stocks || stocks.length === 0) {
+            stockContainer.innerHTML = '<div class="loading">没有找到股票数据</div>';
+            return;
+        }
+
+        // 创建表头信息
+        var headerInfo = document.createElement('div');
+        headerInfo.className = 'header-info';
+
+        // 添加图例说明
+        var legend = '<span class="legend-item"><span class="legend-color top10"></span>流通市值前10名</span>' +
+            '<span class="legend-item"><span class="legend-color top20"></span>流通市值11-20名</span>' +
+            '<span class="legend-item"><span class="legend-color others"></span>其他</span>';
+
+        headerInfo.innerHTML = '<div>行业: <strong>' + industryName + '</strong> | 数据时间: ' + timeString +
+            ' | 共 <strong>' + stocks.length + '</strong> 只股票 | ' + legend + '</div>';
+
+        // 创建表格
+        var table = document.createElement('table');
+        table.className = 'stock-table';
+
+        // 定义表头列
+        var headers = [
+            { key: '股票代码', label: '代码' },
+            { key: '股票名称', label: '名称' },
+            { key: '所属行业', label: '行业' },
+            { key: '流通市值', label: '流通市值' },
+            { key: '今日涨幅%', label: '涨幅%' },
+            { key: '成交额', label: '成交额' },
+            { key: '换手率', label: '换手率' },
+            { key: '当前价格', label: '现价' },
+            { key: '今日最高价', label: '今高' },
+            { key: '今日最低价', label: '今低' },
+            { key: '5日最高收盘价', label: '5日高' },
+            { key: '5日最低收盘价', label: '5日低' },
+            { key: '30日最高收盘价', label: '30日高' },
+            { key: '30日最低收盘价', label: '30日低' },
+            { key: '距今日最高%', label: '今高%' },
+            { key: 'count_today_high', label: '今高次' },
+            { key: '距5日最高%', label: '5日高%' },
+            { key: 'count_5day_high', label: '5日高次' },
+            { key: '距30日最高%', label: '30日高%' },
+            { key: 'count_30day_high', label: '30日高次' },
+            { key: '距今日最低%', label: '今低%' },
+            { key: 'count_today_low', label: '今低次' },
+            { key: '距5日最低%', label: '5日低%' },
+            { key: 'count_5day_low', label: '5日低次' },
+            { key: '距30日最低%', label: '30日低%' },
+            { key: 'count_30day_low', label: '30日低次' }
+        ];
+
+        // 创建表头
+        var thead = document.createElement('thead');
+        var headerRow = document.createElement('tr');
+
+        headers.forEach(function(header) {
+            var th = document.createElement('th');
+            th.textContent = header.label;
+            th.setAttribute('data-key', header.key); // 用于排序
+
+            // 添加排序点击事件
+            th.addEventListener('click', function() {
+                sortTable(table, header.key);
+            });
+
+            headerRow.appendChild(th);
+        });
+
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // 创建表体
+        var tbody = document.createElement('tbody');
+
+        // 根据流通市值排序
+        var sortedStocks = [...stocks].sort(function(a, b) {
+            var valueA = parseFloat(a['流通市值']);
+            var valueB = parseFloat(b['流通市值']);
+            return valueB - valueA; // 降序排列
+        });
+
+        sortedStocks.forEach(function(stock, index) {
+            var row = document.createElement('tr');
+
+            // 根据排名添加背景色类
+            if (index < 10) {
+                row.classList.add('top10');
+            } else if (index < 20) {
+                row.classList.add('top20');
+            } else {
+                row.classList.add('others');
+            }
+
+            // 为缺少的字段添加默认值
+            if (!stock.hasOwnProperty('count_today_high')) stock.count_today_high = 0;
+            if (!stock.hasOwnProperty('count_5day_high')) stock.count_5day_high = 0;
+            if (!stock.hasOwnProperty('count_30day_high')) stock.count_30day_high = 0;
+            if (!stock.hasOwnProperty('count_today_low')) stock.count_today_low = 0;
+            if (!stock.hasOwnProperty('count_5day_low')) stock.count_5day_low = 0;
+            if (!stock.hasOwnProperty('count_30day_low')) stock.count_30day_low = 0;
+
+            headers.forEach(function(header) {
+                var td = document.createElement('td');
+                var value = stock[header.key];
+
+                // 格式化显示
+                if (typeof value === 'number' || !isNaN(parseFloat(value))) {
+                    if (header.key.includes('%')) {
+                        // 百分比格式化为两位小数
+                        value = value !== null && value !== undefined ? parseFloat(value).toFixed(2) + '%' : '-';
+
+                        // 添加颜色样式
+                        if (parseFloat(value) > 0) {
+                            td.className = 'positive';
+                        } else if (parseFloat(value) < 0) {
+                            td.className = 'negative';
+                        }
+                    }
+                    else if (header.key.includes('价格') || header.key.includes('价')) {
+                        // 价格格式化为两位小数
+                        value = value !== null && value !== undefined ? parseFloat(value).toFixed(2) : '-';
+                    }
+                    else if (header.key === '流通市值' || header.key === '成交额') {
+                        // 添加单位（亿）
+                        value = value !== null && value !== undefined ? parseFloat(value).toFixed(2) + '亿' : '-';
+                    }
+                    else if (header.key === '换手率') {
+                        // 添加百分号
+                        value = value !== null && value !== undefined ? parseFloat(value).toFixed(2) + '%' : '-';
+                    }
+                    // 次数字段采用整数显示
+                    else if (header.key.includes('count_')) {
+                        value = value !== null && value !== undefined ? parseInt(value) : '0';
+                    }
+                }
+
+                td.textContent = value !== undefined && value !== null ? value : '-';
+                row.appendChild(td);
+            });
+
+            tbody.appendChild(row);
+        });
+
+        table.appendChild(tbody);
+
+        // 清空并添加新内容
+        stockContainer.innerHTML = '';
+        stockContainer.appendChild(headerInfo);
+        stockContainer.appendChild(table);
+    }
+
+    // 表格排序功能
+    function sortTable(table, key) {
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+
+        // 获取当前排序方向
+        var currentDir = table.getAttribute('data-sort-dir') || 'asc';
+        var currentKey = table.getAttribute('data-sort-key');
+
+        // 如果是同一列，切换排序方向
+        var newDir = (currentKey === key && currentDir === 'asc') ? 'desc' : 'asc';
+
+        // 更新表格属性
+        table.setAttribute('data-sort-key', key);
+        table.setAttribute('data-sort-dir', newDir);
+
+        // 获取该列的索引
+        var headers = table.querySelectorAll('th');
+        var index = -1;
+        for (var i = 0; i < headers.length; i++) {
+            if (headers[i].getAttribute('data-key') === key) {
+                index = i;
+                break;
+            }
+        }
+
+        if (index === -1) return;
+
+        // 排序行
+        rows.sort(function(a, b) {
+            var cellA = a.cells[index].textContent;
+            var cellB = b.cells[index].textContent;
+
+            // 尝试解析数字
+            var valueA = parseFloat(cellA.replace('%', '').replace('亿', ''));
+            var valueB = parseFloat(cellB.replace('%', '').replace('亿', ''));
+
+            if (!isNaN(valueA) && !isNaN(valueB)) {
+                // 数字比较
+                return newDir === 'asc' ? valueA - valueB : valueB - valueA;
+            } else {
+                // 字符串比较
+                return newDir === 'asc'
+                    ? cellA.localeCompare(cellB, 'zh')
+                    : cellB.localeCompare(cellA, 'zh');
+            }
+        });
+
+        // 重建表格
+        rows.forEach(function(row) {
+            tbody.appendChild(row);
+        });
+    }
+
+    // 页面加载完成后开始检查
+    document.addEventListener('DOMContentLoaded', checkPywebview);
+
+    // 也监听pywebviewready事件
+    document.addEventListener('pywebviewready', checkPywebview);
+</script>
+</body>
+</html>
