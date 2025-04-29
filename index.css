@@ -44,6 +44,43 @@
     color: white;
 }
 
+/* 工具容器样式 */
+.tools-container {
+    display: flex;
+    justify-content: flex-end;
+    margin: 10px 0;
+    padding: 5px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+/* 剪贴板工具样式 */
+.clipboard-tool {
+    display: flex;
+    align-items: center;
+}
+
+#clipboard-btn {
+    padding: 5px 10px;
+    background-color: #4a8a9c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-right: 10px;
+    transition: background-color 0.2s;
+}
+
+#clipboard-btn:hover {
+    background-color: #3a6d7c;
+}
+
+#clipboard-result {
+    font-size: 12px;
+    color: #333;
+}
+
 /* 股票标题样式 */
 .title {
     width: 100%;
@@ -115,12 +152,26 @@
     border: 1px solid #eee;
 }
 
+/* 分组标题行样式 */
+.group-header {
+    background-color: #e0e0e0;
+    font-weight: bold;
+    text-align: left;
+}
+
+.group-header td {
+    padding: 8px;
+    font-size: 12px;
+    border-top: 2px solid #bbb;
+    border-bottom: 2px solid #bbb;
+}
+
 /* 行式偶数行样式，但优先级低于排名样式 */
-.stock-table tr:nth-child(even) {
+.stock-table tr:nth-child(even):not(.group-header):not(.top10):not(.top20) {
     background-color: #f9f9f9;
 }
 
-.stock-table tr:hover {
+.stock-table tr:not(.group-header):hover {
     background-color: #f0f0f0;
 }
 
@@ -144,6 +195,18 @@
 
 .stock-table tr.others {
     /* 默认白色背景 */
+}
+
+/* 剪贴板匹配高亮样式 */
+.stock-table tr.clipboard-match {
+    background-color: rgba(173, 216, 230, 0.6) !important; /* 浅蓝色背景 */
+    border: 2px solid #4682b4;
+}
+
+/* 7个点次数列高亮 */
+.stock-table td:nth-child(15) {
+    font-weight: bold;
+    background-color: rgba(230, 230, 250, 0.5);
 }
 
 /* 图例样式 */
