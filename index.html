@@ -34,6 +34,16 @@
         <span class="total-limit-up-text">总涨停数</span>
         <input type="number" class="total-limit-up-input" value="1">
     </div>
+    <div class="yesterday-negative">
+        <input type="checkbox" class="yesterday-negative-check">
+        <span class="yesterday-negative-text">昨天阴</span>
+    </div>
+    <div class="prev-days-positive">
+        <input type="checkbox" class="prev-days-positive-check">
+        <span class="prev-days-positive-text">前</span>
+        <input type="number" class="prev-days-positive-input" value="3" min="1" max="10">
+        <span class="prev-days-positive-text2">天阳</span>
+    </div>
     <div class="percent_up_to">
         <input type="checkbox" class="up_check">
         <span class="up_check_text">涨幅达到(%)</span>
@@ -833,6 +843,9 @@
             sunDay: document.querySelector('.sun_day').value,
             totalLimitUpCheck: document.querySelector('.total-limit-up-check').checked,
             totalLimitUp: document.querySelector('.total-limit-up-input').value,
+            yesterdayNegativeCheck: document.querySelector('.yesterday-negative-check').checked,
+            prevDaysPositiveCheck: document.querySelector('.prev-days-positive-check').checked,
+            prevDaysPositive: document.querySelector('.prev-days-positive-input').value,
             preview: document.querySelector('.preview').value,
             back: document.querySelector('.back').value,
         };
@@ -881,11 +894,19 @@
         const sunDayValue = parseInt(document.querySelector('.sun_day').value) || 0
         const totalLimitUpCheckEnabled = document.querySelector('.total-limit-up-check').checked
         const totalLimitUpValue = parseInt(document.querySelector('.total-limit-up-input').value) || 1
+        const yesterdayNegativeCheckEnabled = document.querySelector('.yesterday-negative-check').checked
+        const prevDaysPositiveCheckEnabled = document.querySelector('.prev-days-positive-check').checked
+        const prevDaysPositiveValue = parseInt(document.querySelector('.prev-days-positive-input').value) || 3
         const currentTime = lastUpdateTime || new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit'})
         let rowIndex = 1
         const processedStocks = new Set()
         const currentDisplayedStocks = new Set()
         const filteredStocks = []
+
+        // ===== 调试配置：设置要跟踪的股票代码，为空则不调试 =====
+        const DEBUG_STOCK = '301486';
+        if (DEBUG_STOCK) console.log(`\n===== 开始筛选调试: ${DEBUG_STOCK} =====`);
+
         for (const [date, stocksList] of Object.entries(window.conceptData)) {
             for (const stockData of stocksList) {
                 const stockCode = stockData[0]
@@ -894,75 +915,123 @@
                 const stockName = stockData[1]
                 const concept = stockData[3]
                 const merged = window.mergedData[stockCode]
-                if (!merged) continue
+                if (!merged) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：不在mergedData中`);
+                    continue;
+                }
                 const minDaysFromLimitUp = parseInt(document.querySelector('.preview').value) || 3
                 const maxDaysFromLimitUp = parseInt(document.querySelector('.back').value) || 21
                 // 根据股票代码判断使用严格版还是宽松版
                 // 3开头和68开头用严格版（19.8%），其他用宽松版（9.8%）
                 const useStrict = stockCode.startsWith('3') || stockCode.startsWith('68');
-                const daysFromLimitUp = useStrict 
+                const daysFromLimitUp = useStrict
                     ? merged.离涨停多少天_严格  // 3开头和68开头用严格版
                     : merged.离涨停多少天_宽松; // 其他用宽松版
-                if (daysFromLimitUp === '无涨停' || daysFromLimitUp === '-' || daysFromLimitUp === undefined) continue
+                if (daysFromLimitUp === '无涨停' || daysFromLimitUp === '-' || daysFromLimitUp === undefined) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：离涨停天数为"${daysFromLimitUp}"`);
+                    continue;
+                }
                 const days = parseInt(daysFromLimitUp)
-                if (isNaN(days) || days < minDaysFromLimitUp || days > maxDaysFromLimitUp) continue
+                if (isNaN(days) || days < minDaysFromLimitUp || days > maxDaysFromLimitUp) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：离涨停天数${days}不在${minDaysFromLimitUp}-${maxDaysFromLimitUp}范围内`);
+                    continue;
+                }
                 if (sunDayCheckEnabled) {
                     const sunnyDays = merged.阳天数 || 0
-                    if (sunnyDays !== sunDayValue) continue
+                    if (sunnyDays !== sunDayValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：阳天数${sunnyDays} != 要求${sunDayValue}`);
+                        continue;
+                    }
 
 // 新增：如果阳天数>0，同时要求涨幅>0（过滤高开低走的股票）
                     if (sunDayValue > 0) {
                         const zhangfu = parseFloat(merged.涨幅)
-                        if (isNaN(zhangfu) || zhangfu <= 0) continue
+                        if (isNaN(zhangfu) || zhangfu <= 0) {
+                            if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：阳天数>0但涨幅${zhangfu}<=0`);
+                            continue;
+                        }
                     }
                 }
                 const zhangfu = parseFloat(merged.涨幅)
-                if (upCheckEnabled && (isNaN(zhangfu) || zhangfu < upToValue)) continue
-                if (todayHighCheckEnabled && (!merged.今日最高价 || parseFloat(merged.现价) < parseFloat(merged.今日最高价))) continue
+                if (upCheckEnabled && (isNaN(zhangfu) || zhangfu < upToValue)) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：涨幅${zhangfu} < 要求${upToValue}`);
+                    continue;
+                }
+                if (todayHighCheckEnabled && (!merged.今日最高价 || parseFloat(merged.现价) < parseFloat(merged.今日最高价))) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：现价${merged.现价} < 今日最高价${merged.今日最高价}`);
+                    continue;
+                }
                 if (highCountCheckEnabled) {
                     const highCount = merged.今天创新高次数 || 0
-                    if (highCount < highCountValue) continue
+                    if (highCount < highCountValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：新高次数${highCount} < 要求${highCountValue}`);
+                        continue;
+                    }
                 }
-                if (lowCheckEnabled && (!merged.今日最低价 || parseFloat(merged.现价) > parseFloat(merged.今日最低价))) continue
+                if (lowCheckEnabled && (!merged.今日最低价 || parseFloat(merged.现价) > parseFloat(merged.今日最低价))) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：现价${merged.现价} > 今日最低价${merged.今日最低价}`);
+                    continue;
+                }
                 if (lowCountCheckEnabled) {
                     const lowCount = merged.今天创新低次数 || 0
-                    if (lowCount < lowCountValue) continue
+                    if (lowCount < lowCountValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：新低次数${lowCount} < 要求${lowCountValue}`);
+                        continue;
+                    }
                 }
                 if (everUpCheckEnabled) {
                     const everUpZhangfu = parseFloat(merged.曾经最高涨幅) || 0
-                    if (everUpZhangfu < everUpValue) continue
+                    if (everUpZhangfu < everUpValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：曾经最高涨幅${everUpZhangfu} < 要求${everUpValue}`);
+                        continue;
+                    }
                 }
                 if (break30CheckEnabled) {
                     const currentPrice = parseFloat(merged['现价']) || 0
                     const max30d = parseFloat(merged['30日最高价']) || 0
                     if (max30d > 0) {
                         const priceRatio = (currentPrice / max30d) * 100
-                        if (priceRatio < break30Value) continue
+                        if (priceRatio < break30Value) {
+                            if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：突破30日新高比例${priceRatio.toFixed(2)}% < 要求${break30Value}%`);
+                            continue;
+                        }
                     }
                 }
                 if (break30CountCheckEnabled) {
                     const count30 = merged['30日新高次数'] || 0
-                    if (count30 < break30CountValue) continue
+                    if (count30 < break30CountValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：30日新高次数${count30} < 要求${break30CountValue}`);
+                        continue;
+                    }
                 }
-                if (break60CheckEnabled && !merged.已突破60日新高) continue
+                if (break60CheckEnabled && !merged.已突破60日新高) {
+                    if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：未突破60日新高`);
+                    continue;
+                }
                 if (limitUpGte2CheckEnabled) {
                     // 根据股票代码判断使用严格版还是宽松版
                     // 3开头和68开头用严格版（19.8%），其他用宽松版（9.8%）
-                    const consecutive = useStrict 
-                        ? (merged.连续涨停数_严格 || 0) 
+                    const consecutive = useStrict
+                        ? (merged.连续涨停数_严格 || 0)
                         : (merged.连续涨停数_宽松 || 0);
-                    const daysFromLimitUp = useStrict 
-                        ? merged.离涨停多少天_严格 
+                    const daysFromLimitUp = useStrict
+                        ? merged.离涨停多少天_严格
                         : merged.离涨停多少天_宽松;
-                    
+
                     // 特殊处理：连续涨停数=1 表示"显示所有有涨停记录的股票"
                     if (limitUpGte2Value === 1) {
                         // 筛选条件：有涨停记录（离涨停多少天不是'无涨停'）
                         // 不限制连续涨停数，既包括单日涨停（consecutive=0）也包括连续涨停（consecutive>=2）
-                        if (daysFromLimitUp === '无涨停') continue;
+                        if (daysFromLimitUp === '无涨停') {
+                            if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：连续涨停>=1但无涨停记录`);
+                            continue;
+                        }
                     } else {
                         // 常规逻辑：连续涨停数>=2，筛选连续涨停
-                        if (consecutive < limitUpGte2Value) continue;
+                        if (consecutive < limitUpGte2Value) {
+                            if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：连续涨停数${consecutive} < 要求>=${limitUpGte2Value}`);
+                            continue;
+                        }
                     }
                 }
                 if (limitUp2CheckEnabled) {
@@ -970,40 +1039,64 @@
                     const consecutiveLimitUp = limitUp2Value == 1
                         ? (merged.连续涨停数_严格 || 0)  // 输入1，用严格版（300/688需19.8%）
                         : (merged.连续涨停数_宽松 || 0); // 输入2及以上，用宽松版（统一9.8%）
-                    if (consecutiveLimitUp !== limitUp2Value) continue
+                    if (consecutiveLimitUp !== limitUp2Value) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：涨停数=${consecutiveLimitUp} != 要求${limitUp2Value}`);
+                        continue;
+                    }
                 }
                 // 总涨停数筛选
                 if (totalLimitUpCheckEnabled) {
                     // 根据股票代码判断使用严格版还是宽松版
                     const useStrict = stockCode.startsWith('3') || stockCode.startsWith('68');
-                    const consecutiveCount = useStrict 
-                        ? (merged.连续涨停数_严格 || 0) 
+                    const consecutiveCount = useStrict
+                        ? (merged.连续涨停数_严格 || 0)
                         : (merged.连续涨停数_宽松 || 0);
-                    const daysFromLimit = useStrict 
-                        ? merged.离涨停多少天_严格 
+                    const daysFromLimit = useStrict
+                        ? merged.离涨停多少天_严格
                         : merged.离涨停多少天_宽松;
-                    
+
                     // 判断是否为单日涨停：连续涨停数=0 且 有涨停记录
                     const isSingleDayLimitUp = (consecutiveCount === 0 && daysFromLimit !== '无涨停');
-                    
+
                     // 计算总涨停数（与表格显示逻辑一致）
                     let displayTotalLimitUpCount;
                     if (isSingleDayLimitUp) {
                         // 单日涨停：总涨停数 = 全部涨停天数 - 1
-                        const allLimitDays = useStrict 
-                            ? (merged.全部涨停天数_严格 || 0) 
+                        const allLimitDays = useStrict
+                            ? (merged.全部涨停天数_严格 || 0)
                             : (merged.全部涨停天数_宽松 || 0);
                         displayTotalLimitUpCount = Math.max(0, allLimitDays - 1);
                     } else {
                         // 连续涨停：使用原有的总涨停数_天数
-                        displayTotalLimitUpCount = useStrict 
-                            ? (merged.总涨停数_天数_严格 !== undefined ? merged.总涨停数_天数_严格 : 0) 
+                        displayTotalLimitUpCount = useStrict
+                            ? (merged.总涨停数_天数_严格 !== undefined ? merged.总涨停数_天数_严格 : 0)
                             : (merged.总涨停数_天数_宽松 !== undefined ? merged.总涨停数_天数_宽松 : 0);
                     }
-                    
+
                     // 筛选：总涨停数必须等于输入值
-                    if (displayTotalLimitUpCount !== totalLimitUpValue) continue;
+                    if (displayTotalLimitUpCount !== totalLimitUpValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：总涨停数${displayTotalLimitUpCount} != 要求${totalLimitUpValue}`);
+                        continue;
+                    }
                 }
+                // 昨天阴筛选：昨日涨幅 < 0
+                if (yesterdayNegativeCheckEnabled) {
+                    const change = parseFloat(merged.昨日涨幅) || 0
+                    if (change >= 0) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：昨日涨幅${change} >= 0，不满足昨天阴条件`);
+                        continue;
+                    }
+                }
+                // 前N天阳筛选：前N天连续阳涨幅天数 >= 用户输入值
+                if (prevDaysPositiveCheckEnabled) {
+                    const prevPositiveDays = merged.前N天阳天数 || 0
+                    if (prevPositiveDays < prevDaysPositiveValue) {
+                        if (stockCode === DEBUG_STOCK) console.log(`[调试] ${stockCode} 被过滤：前N天阳${prevPositiveDays} < 要求${prevDaysPositiveValue}`);
+                        continue;
+                    }
+                }
+                // 通过所有筛选
+                if (stockCode === DEBUG_STOCK) console.log(`[调试] ✅ ${stockCode} 通过所有筛选，已添加到显示列表`);
                 filteredStocks.push({stockCode, stockName, concept, merged})
             }
         }
@@ -1885,6 +1978,18 @@
                 })
                 totalLimitUpInput.addEventListener('input', function() {
                     if (totalLimitUpCheck.checked && window.mergedData) fillStockTable()
+                })
+                const yesterdayNegativeCheck = document.querySelector('.yesterday-negative-check')
+                yesterdayNegativeCheck.addEventListener('change', function() {
+                    if (window.mergedData) fillStockTable()
+                })
+                const prevDaysPositiveCheck = document.querySelector('.prev-days-positive-check')
+                const prevDaysPositiveInput = document.querySelector('.prev-days-positive-input')
+                prevDaysPositiveCheck.addEventListener('change', function() {
+                    if (window.mergedData) fillStockTable()
+                })
+                prevDaysPositiveInput.addEventListener('input', function() {
+                    if (prevDaysPositiveCheck.checked && window.mergedData) fillStockTable()
                 })
                 const scrapTimeInput = document.querySelector('.scrapt_time')
                 scrapTimeInput.addEventListener('change', function() {

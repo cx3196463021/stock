@@ -373,14 +373,16 @@ class Api:
                 price_list = hist_data.get('历史价格列表', [])
                 if price_list and len(price_list) >= 2:
                     closes = [p['收盘价'] for p in price_list]
-                    yesterday_close_from_hist = hist_data.get('昨日收盘价', 0)
                     try:
                         realtime_price = float(real_data.get('现价', 0))
                         if realtime_price > 0:
-                            if len(price_list) >= 2 and abs(price_list[-2]['收盘价'] - yesterday_close_from_hist) < 0.01:
-                                closes[-1] = realtime_price
+                            # 判断历史数据最后一天是不是今天
+                            last_date = price_list[-1].get('日期', '')
+                            today_str = datetime.now().strftime('%Y-%m-%d')
+                            if last_date == today_str:
+                                closes[-1] = realtime_price  # 今天的数据，替换
                             else:
-                                closes.append(realtime_price)
+                                closes.append(realtime_price)  # 不是今天，追加
                     except Exception:
                         pass
                     for i in range(len(closes) - 1, 0, -1):
@@ -388,6 +390,19 @@ class Api:
                         prev_close = closes[i - 1]
                         if current_close > prev_close:
                             sunny_days += 1
+                        else:
+                            break
+            # 计算前N天连续阳涨幅天数（跳过最后两天，从倒数第三天开始往前数）
+            # 说明：前三天阳 = 倒数第三天 + 倒数第四天 + 倒数第五天连续阳
+            prev_positive_days = 0
+            if stock_code in self.history_data:
+                hist_data = self.history_data[stock_code]
+                price_list = hist_data.get('历史价格列表', [])
+                if price_list and len(price_list) >= 3:
+                    for i in range(len(price_list) - 3, -1, -1):
+                        change = price_list[i].get('涨幅', 0)
+                        if change > 0:
+                            prev_positive_days += 1
                         else:
                             break
             limit_up_count_strict = 0
@@ -492,7 +507,7 @@ class Api:
                 current_change = price_list[-1]['涨幅'] if price_list else ''
             else:
                 current_change = ''
-            merged[stock_code] = {'代码': stock_code, '名称': real_data.get('名称', ''), '行业': self.industry_data.get(stock_code, {}).get('行业', '-'), '现价': real_data.get('现价', ''), '涨幅': current_change, '换手率': real_data.get('换手率', ''), '流通市值': real_data.get('流通市值', ''), '今日最高价': real_data.get('今日最高价', ''), '今日最低价': real_data.get('今日最低价', ''), '涨停数_严格': limit_up_count_strict, '涨停数_宽松': limit_up_count_loose, '单日涨停数_严格': single_count_strict, '单日涨停数_宽松': single_count_loose, '连续涨停数_严格': limit_info_strict.get('最大连续涨停数', 0), '连续涨停数_宽松': limit_info_loose.get('最大连续涨停数', 0), '总涨停数_严格': max(0, total_all_limit_days_strict - limit_info_strict.get('最大连续涨停数', 0)), '总涨停数_宽松': max(0, total_all_limit_days_loose - limit_info_loose.get('最大连续涨停数', 0)), '全部涨停天数_严格': total_all_limit_days_strict, '全部涨停天数_宽松': total_all_limit_days_loose, '总涨停数_天数_严格': max(0, total_all_limit_days_strict - limit_info_strict.get('最大连续涨停数', 0)), '总涨停数_天数_宽松': max(0, total_all_limit_days_loose - limit_info_loose.get('最大连续涨停数', 0)), '离涨停多少天_严格': limit_info_strict.get('离最新日期天数', '无涨停'), '离涨停多少天_宽松': limit_info_loose.get('离最新日期天数', '无涨停'), '阳天数': sunny_days}
+            merged[stock_code] = {'代码': stock_code, '名称': real_data.get('名称', ''), '行业': self.industry_data.get(stock_code, {}).get('行业', '-'), '现价': real_data.get('现价', ''), '涨幅': current_change, '换手率': real_data.get('换手率', ''), '流通市值': real_data.get('流通市值', ''), '今日最高价': real_data.get('今日最高价', ''), '今日最低价': real_data.get('今日最低价', ''), '涨停数_严格': limit_up_count_strict, '涨停数_宽松': limit_up_count_loose, '单日涨停数_严格': single_count_strict, '单日涨停数_宽松': single_count_loose, '连续涨停数_严格': limit_info_strict.get('最大连续涨停数', 0), '连续涨停数_宽松': limit_info_loose.get('最大连续涨停数', 0), '总涨停数_严格': max(0, total_all_limit_days_strict - limit_info_strict.get('最大连续涨停数', 0)), '总涨停数_宽松': max(0, total_all_limit_days_loose - limit_info_loose.get('最大连续涨停数', 0)), '全部涨停天数_严格': total_all_limit_days_strict, '全部涨停天数_宽松': total_all_limit_days_loose, '总涨停数_天数_严格': max(0, total_all_limit_days_strict - limit_info_strict.get('最大连续涨停数', 0)), '总涨停数_天数_宽松': max(0, total_all_limit_days_loose - limit_info_loose.get('最大连续涨停数', 0)), '离涨停多少天_严格': limit_info_strict.get('离最新日期天数', '无涨停'), '离涨停多少天_宽松': limit_info_loose.get('离最新日期天数', '无涨停'), '阳天数': sunny_days, '前N天阳天数': prev_positive_days, '今天创新高次数': tracking.get('突破新高次数', 0), '今天创新低次数': tracking.get('突破新低次数', 0)}
             if stock_code in self.history_data:
                 hist_data = self.history_data[stock_code]
                 merged[stock_code].update({'昨日收盘价': hist_data.get('昨日收盘价', ''), '昨日涨幅': hist_data.get('昨日涨幅', ''), '30日最高价': hist_data.get('30日最高价', ''), '30日最低价': hist_data.get('30日最低价', ''), '60日最高价': hist_data.get('60日最高价', ''), '60日最低价': hist_data.get('60日最低价', '')})
@@ -714,42 +729,114 @@ class Api:
         return today_limit_up
 
     def start_auto_update(self, interval=5):
+        """
+        启动双线程更新：
+        - 表格线程：每2秒更新表格中显示的股票（高频）
+        - 全量线程：每N秒完整更新所有股票（低频）
+        """
         if self.auto_update_running:
             return {'状态': '已运行', '消息': '自动更新已在运行'}
+
         self.auto_update_running = True
-        self.update_thread = threading.Thread(target=self._auto_update_loop, args=(interval,), daemon=True)
-        self.update_thread.start()
-        print('后台自动更新已启动')
-        return {'状态': '已启动', '消息': '自动更新已启动'}
+
+        # 线程1: 表格专用更新（每2秒）
+        self.table_update_thread = threading.Thread(
+            target=self._table_update_loop,
+            args=(2,),
+            daemon=True
+        )
+        self.table_update_thread.start()
+
+        # 线程2: 全量更新（每N秒）
+        self.full_update_thread = threading.Thread(
+            target=self._full_update_loop,
+            args=(interval,),
+            daemon=True
+        )
+        self.full_update_thread.start()
+
+        print(f'双线程更新已启动: 表格线程(2秒), 全量线程({interval}秒)')
+        return {'状态': '已启动', '消息': f'双线程更新已启动'}
 
     def stop_auto_update(self):
+        """停止双线程更新"""
         self.auto_update_running = False
+        print('双线程更新已停止')
         return {'状态': '已停止', '消息': '自动更新已停止'}
 
-    def _auto_update_loop(self, interval):
-        print('后台自动更新任务启动')
+    def _table_update_loop(self, interval=2):
+        """
+        表格专用更新循环（高频）
+        只更新表格中显示的股票，不调用merge_all_data，极快
+        """
+        print(f'[表格线程] 启动，间隔{interval}秒')
+        while self.auto_update_running:
+            time_info = get_xls_data.get_current_time_info()
+            hour = time_info['小时']
+            minute = time_info['分钟']
+
+            # 交易时间判断
+            is_trading = (hour == 9 and minute >= 15) or (10 <= hour <= 14) or (hour == 15 and minute == 0)
+
+            if is_trading and self.merged_data:
+                try:
+                    # 获取表格中的股票
+                    priority_codes = webview.windows[0].evaluate_js(
+                        'window.getCurrentDisplayedStocks ? window.getCurrentDisplayedStocks() : []'
+                    ) or []
+
+                    if priority_codes:
+                        # 只爬取表格股票
+                        self._quick_update_priority_stocks(priority_codes)
+                        # 增量推送（不调用merge_all_data）
+                        self._quick_push_realtime_only(priority_codes)
+                except Exception as e:
+                    print(f'[表格线程] 更新失败: {e}')
+
+                time.sleep(interval)
+            else:
+                time.sleep(10)  # 非交易时间或数据未初始化时休眠
+
+    def _full_update_loop(self, interval=30):
+        """
+        全量更新循环（低频）
+        完整爬取所有股票，调用merge_all_data
+        """
+        print(f'[全量线程] 启动，间隔{interval}秒')
         while self.auto_update_running:
             time_info = get_xls_data.get_current_time_info()
             hour = time_info['小时']
             minute = time_info['分钟']
             second = time_info['秒']
-            is_trading_time = False
-            if hour == 9 and minute >= 15:
-                is_trading_time = True
-            elif 10 <= hour <= 15:
-                is_trading_time = True
-            elif hour == 16 and minute == 0:
-                is_trading_time = True
-            if hour == 9 and minute == 14 and (second >= 30):
-                print(f"[{time_info['时间']}] 开始检查数据更新...")
+
+            is_trading = (hour == 9 and minute >= 15) or (10 <= hour <= 14) or (hour == 15 and minute == 0)
+
+            # 9:14:30 检查数据更新
+            if hour == 9 and minute == 14 and second >= 30:
+                print(f"[全量线程] 开始检查数据更新...")
                 self._check_and_update_data()
                 time.sleep(10)
-            elif is_trading_time:
-                print(f"[{time_info['时间']}] 交易时间更新数据...")
-                self._update_all_data()
+            elif is_trading:
+                try:
+                    previewValue = int(webview.windows[0].evaluate_js(
+                        'document.querySelector(".preview").value'
+                    ) or 3)
+                    backValue = int(webview.windows[0].evaluate_js(
+                        'document.querySelector(".back").value'
+                    ) or 21)
+
+                    # 完整爬取所有股票
+                    print(f'[全量线程] 开始完整更新...')
+                    self.get_real_time_data(strat_index=None, count=backValue, show_progress=False)
+                    # 完整推送（调用merge_all_data）
+                    self._push_to_frontend(previewValue, backValue)
+                    print(f'[全量线程] 完成: {self.last_update_time}')
+                except Exception as e:
+                    print(f'[全量线程] 更新失败: {e}')
+
                 time.sleep(interval)
             else:
-                print(f"[{time_info['时间']}] 非交易时间，暂停更新...")
+                print(f"[全量线程] 非交易时间，休眠60秒")
                 time.sleep(60)
 
     def _check_and_update_data(self):
@@ -775,50 +862,194 @@ class Api:
         except Exception as e:
             print(f'检查数据更新失败: {e}')
 
-    def _update_all_data(self):
+    def _quick_update_priority_stocks(self, stock_codes):
+        """
+        快速更新指定股票的实时数据
+        stock_codes: 股票代码列表 ['000036', '002759', ...]
+        返回: 是否成功更新
+        """
+        import asyncio
+        if not stock_codes:
+            return False
+
+        # 添加 sh/sz 前缀
+        prefix_codes = []
+        for code in stock_codes:
+            code = str(code).strip()
+            if code.startswith('6'):
+                prefix_codes.append(f'sh{code}')
+            else:
+                prefix_codes.append(f'sz{code}')
+
+        # 异步爬取
         try:
-            previewValue = int(webview.windows[0].evaluate_js('document.querySelector(".preview").value'))
-            backValue = int(webview.windows[0].evaluate_js('document.querySelector(".back").value'))
-            priority_codes_js = webview.windows[0].evaluate_js('window.getCurrentDisplayedStocks ? window.getCurrentDisplayedStocks() : []')
-            priority_codes = priority_codes_js if priority_codes_js else []
-            print(f'自动更新使用参数: preview={previewValue}, back={backValue}, 表格股票数={len(priority_codes)}')
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            results = loop.run_until_complete(
+                get_xls_data.fetch_stocks_batch_async(prefix_codes, '表格优先')
+            )
+            loop.close()
+
+            # 更新到 real_time_data
+            update_count = 0
+            for item in results:
+                if item and 'code' in item and item.get('data'):
+                    self.real_time_data[item['code']] = item['data']
+                    update_count += 1
+
+            print(f'[快速更新] 成功更新 {update_count}/{len(stock_codes)} 只股票')
+            return update_count > 0
         except Exception as e:
-            print(f'获取前端参数失败，使用默认值: {e}')
-            previewValue = 3
-            backValue = 21
-            priority_codes = []
-        result = self.get_real_time_data(strat_index=None, count=backValue, show_progress=False, priority_codes=priority_codes)
-        concept_count = self.get_concept_count()
-        print(f'数据更新完成: {self.last_update_time} - {self.data_source_info}')
-        try:
-            webview.windows[0].evaluate_js('if(window.hideProgress) hideProgress();')
-        except Exception as e:
-            pass
+            print(f'[快速更新] 失败: {e}')
+            return False
+
+    def _push_to_frontend(self, previewValue=None, backValue=None):
+        """
+        推送当前数据到前端
+        previewValue: 离涨停天数最小值
+        backValue: 离涨停天数最大值
+        """
         try:
             import json
+            if previewValue is None:
+                previewValue = int(webview.windows[0].evaluate_js('document.querySelector(".preview").value') or 3)
+            if backValue is None:
+                backValue = int(webview.windows[0].evaluate_js('document.querySelector(".back").value') or 21)
+
             merged_data = self.get_merged_data(min_days=previewValue, max_days=backValue)
             real_time_data = self.real_time_data
             concept_data = self.concept_data
+            concept_count = self.get_concept_count()
             today_limit_up = self.get_today_limit_up_count()
+
             merged_json = json.dumps(merged_data, ensure_ascii=False)
             real_time_json = json.dumps(real_time_data, ensure_ascii=False)
             concept_data_json = json.dumps(concept_data, ensure_ascii=False)
             concept_count_json = json.dumps(concept_count, ensure_ascii=False)
             today_limit_up_json = json.dumps(today_limit_up, ensure_ascii=False)
+
             webview.windows[0].evaluate_js(f'window.mergedData = {merged_json}')
             webview.windows[0].evaluate_js(f'window.realTimeData = {real_time_json}')
             webview.windows[0].evaluate_js(f'window.conceptData = {concept_data_json}')
             webview.windows[0].evaluate_js(f'window.conceptCount = {concept_count_json}')
             webview.windows[0].evaluate_js(f'window.todayLimitUp = {today_limit_up_json}')
             webview.windows[0].evaluate_js('if(window.fillStockTable) fillStockTable();')
+
+            print(f'[推送] {len(merged_data)}个股票已推送到前端')
+            return True
         except Exception as e:
-            print(f'推送数据到前端失败: {e}')
-        except Exception as e:
-            print(f'更新数据失败: {e}')
+            print(f'[推送] 失败: {e}')
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def _quick_push_realtime_only(self, stock_codes):
+        """
+        快速推送：只更新实时字段，不重新计算派生字段
+        直接修改 self.merged_data 中对应股票的实时字段
+        这样可以跳过耗时的 merge_all_data() 计算
+        """
+        import json
+
+        if not self.merged_data:
+            print('[快速推送] merged_data为空，跳过')
+            return False
+
+        # 只更新这些实时字段
+        realtime_fields = ['现价', '涨幅', '换手率', '量比', '今日最高', '今日最低']
+
+        update_count = 0
+        for code in stock_codes:
+            code = str(code).strip()
+            # 构建带前缀的代码
+            prefix_code = f"sh{code}" if code.startswith('6') else f"sz{code}"
+
+            # 检查实时数据和合并数据中是否存在
+            if prefix_code in self.real_time_data and code in self.merged_data:
+                real_data = self.real_time_data[prefix_code]
+                merged_item = self.merged_data[code]
+
+                # 只更新实时字段
+                for field in realtime_fields:
+                    if field in real_data:
+                        merged_item[field] = real_data[field]
+
+                # 重新计算几个简单的百分比字段
+                try:
+                    if merged_item.get('30日最高') and merged_item.get('现价'):
+                        price = float(merged_item['现价'])
+                        high_30 = float(merged_item['30日最高'])
+                        merged_item['离30日新高%'] = round((price / high_30 - 1) * 100, 2) if high_30 > 0 else 0
+
+                    if merged_item.get('60日最高') and merged_item.get('现价'):
+                        price = float(merged_item['现价'])
+                        high_60 = float(merged_item['60日最高'])
+                        merged_item['离60日新高%'] = round((price / high_60 - 1) * 100, 2) if high_60 > 0 else 0
+
+                    if merged_item.get('30日最低') and merged_item.get('现价'):
+                        price = float(merged_item['现价'])
+                        low_30 = float(merged_item['30日最低'])
+                        merged_item['离30日新低%'] = round((price / low_30 - 1) * 100, 2) if low_30 > 0 else 0
+                except:
+                    pass
+
+                update_count += 1
+
+        if update_count > 0:
             try:
-                webview.windows[0].evaluate_js('if(window.hideProgress) hideProgress();')
-            except:
-                pass
+                # 直接推送已修改的 merged_data，不调用 merge_all_data()
+                merged_json = json.dumps(self.merged_data, ensure_ascii=False)
+                webview.windows[0].evaluate_js(f'window.mergedData = {merged_json}')
+                webview.windows[0].evaluate_js('if(window.fillStockTable) fillStockTable();')
+                print(f'[快速推送] 更新了 {update_count} 只股票的实时字段（跳过merge_all_data）')
+                return True
+            except Exception as e:
+                print(f'[快速推送] 失败: {e}')
+                return False
+
+        return False
+
+    def _update_all_data(self):
+        """
+        两阶段更新：表格股票优先
+        阶段1: 快速爬取 + 增量更新实时字段（不调用merge_all_data，极快）
+        阶段2: 完整爬取 + 完整合并计算（调用merge_all_data）
+        """
+        # 获取前端参数
+        try:
+            previewValue = int(webview.windows[0].evaluate_js('document.querySelector(".preview").value'))
+            backValue = int(webview.windows[0].evaluate_js('document.querySelector(".back").value'))
+            priority_codes_js = webview.windows[0].evaluate_js('window.getCurrentDisplayedStocks ? window.getCurrentDisplayedStocks() : []')
+            priority_codes = priority_codes_js if priority_codes_js else []
+            print(f'自动更新参数: preview={previewValue}, back={backValue}, 表格股票数={len(priority_codes)}')
+        except Exception as e:
+            print(f'获取前端参数失败，使用默认值: {e}')
+            previewValue = 3
+            backValue = 21
+            priority_codes = []
+
+        # ===== 阶段1：快速更新实时字段（不调用merge_all_data）=====
+        if priority_codes and self.merged_data:
+            print(f'[阶段1] 快速更新 {len(priority_codes)} 只股票的实时字段...')
+            quick_success = self._quick_update_priority_stocks(priority_codes)
+            if quick_success:
+                # 使用增量推送，跳过耗时的 merge_all_data()
+                self._quick_push_realtime_only(priority_codes)
+            print(f'[阶段1] 完成')
+
+        # ===== 阶段2：完整更新所有股票 =====
+        print(f'[阶段2] 完整更新所有股票...')
+        result = self.get_real_time_data(strat_index=None, count=backValue, show_progress=False, priority_codes=priority_codes)
+        print(f'[阶段2] 数据获取完成: {self.last_update_time} - {self.data_source_info}')
+
+        try:
+            webview.windows[0].evaluate_js('if(window.hideProgress) hideProgress();')
+        except:
+            pass
+
+        # 完整推送，调用 merge_all_data()
+        self._push_to_frontend(previewValue, backValue)
+        print(f'[阶段2] 全部股票已更新并推送')
 
     def get_update_status(self):
         return {'运行中': self.auto_update_running, '最后更新': self.last_update_time, '数据源': self.data_source_info, '时间信息': get_xls_data.get_current_time_info()}

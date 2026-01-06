@@ -637,6 +637,52 @@ object-fit: contain;
     left: 454px;
 }
 
+/* 昨天阴 */
+.yesterday-negative-check {
+    position: absolute;
+    top: 1px;
+    left: 530px;
+}
+
+.yesterday-negative-text {
+    font-size: 12px;
+    position: absolute;
+    top: 1px;
+    left: 549px;
+    white-space: nowrap;
+}
+
+/* 前N天阳 */
+.prev-days-positive-check {
+    position: absolute;
+    top: 1px;
+    left: 595px;
+}
+
+.prev-days-positive-text {
+    font-size: 12px;
+    position: absolute;
+    top: 1px;
+    left: 614px;
+    white-space: nowrap;
+}
+
+.prev-days-positive-input {
+    position: absolute;
+    top: 2px;
+    left: 626px;
+    width: 25px;
+    height: 13px;
+}
+
+.prev-days-positive-text2 {
+    font-size: 12px;
+    position: absolute;
+    top: 1px;
+    left: 665px;
+    white-space: nowrap;
+}
+
 /* 新股票高亮样式 */
 /* 新股票高亮样式（使用内阴影，不改变边框，避免布局抖动） */
 .new-stock-highlight {
